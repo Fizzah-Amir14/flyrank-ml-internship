@@ -121,10 +121,7 @@ Intentionally recall-oriented: catches 97% of decaying pages at the cost of lowe
 
 ---
 
-## Built With AI
-Built with Claude (Anthropic) as a coding and debugging assistant — used for drafting pipeline code, debugging deployment, and structuring documentation. All modeling decisions (feature selection, leakage checks, train/test split design, evaluation metrics) were made and verified independently; the notebook was re-run to confirm the reported accuracy before publishing.
 
----
 
 ## Repository Structure
 ```
