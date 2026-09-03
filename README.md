@@ -12,7 +12,7 @@ Identifies web pages at risk of search-ranking decay by analyzing Google Search 
 - Content strategists prioritizing pages for review
 - SEO researchers/data scientists studying ranking changes at scale
 
-## Results
+## Results 
 82.1% accuracy, 97% recall. Full methodology, baseline comparison, and error analysis are in `work/capstone_report.md`.
 
 ---
