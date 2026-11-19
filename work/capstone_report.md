@@ -22,7 +22,7 @@ ML helps here because ranking decay isn't driven by one obvious signal — it's 
 
 ## 3. Baseline
 
-A transparent, hand-written rule-based score was built first (see `notebooks/02_your_first_readable_model.ipynb`), flagging pages using simple thresholds on click-through rate and impression trends. This baseline is a fair comparison because it uses the **same underlying signals** as the model, just combined by a fixed rule instead of a learned weighting — so any improvement from the model reflects the model learning better combinations of signals, not access to different data.
+A transparent, hand-written rule-based score was built first (see `notebooks/02_your_first_readable_model.ipynb`), flagging pages using simple thresholds on click-through rate and impression trends. **Caveat:** that baseline was built on the 30k-row starter slice with a different label (`trend_direction == "down"`), so it was **not scored on the capstone split**. The only like-for-like comparison in v2 is the majority-class base rate below; v3 adds a naive "past trend continues" baseline scored on the same split as the model.
 
 Base rate (majority class) on the evaluation split: **50.1%** — reported alongside model accuracy so the accuracy number can be judged against how hard the task actually is.
 
@@ -32,7 +32,7 @@ Base rate (majority class) on the evaluation split: **50.1%** — reported along
 
 **Final feature set (5 query/engagement features)** derived via DuckDB aggregation from the 79M-row warehouse. `avg_gsc_position` was deliberately left out after the leakage discovery (see Section 2).
 
-**Target definition:** a binary label indicating whether a page's search performance is trending downward over the observed window (decaying vs. not decaying).
+**Target definition:** `label = 1` when the page's average GSC position over the last 30 days is deeper than the dataset median (81.7), else 0. Note: this identifies **low-visibility pages** at a point in time; it does not measure change over time. A forward-looking decay label is the main change in v3 (Section 9).
 
 ## 5. Evaluation
 
@@ -46,7 +46,7 @@ Base rate (majority class) on the evaluation split: **50.1%** — reported along
 | Recall (decaying class) | 97% |
 | Precision (decaying class) | 75% |
 
-- **Error analysis:** the model is intentionally recall-oriented — it catches 97% of pages that are actually decaying, but this comes with a **~33% false-flag rate on healthy pages** (precision 75% on the decaying class). In practice this means roughly a third of the review queue will be false alarms, which is an acceptable trade-off for a screening tool but should be stated explicitly to whoever uses the output.
+- **Error analysis:** the model is intentionally recall-oriented — it catches 97% of positive-class pages, but about **32% of healthy pages are also flagged** (precision 75% on the positive class). In practice roughly **a quarter of the review queue will be false alarms**, which is acceptable for a screening tool but should be stated explicitly to whoever uses the output.
 - A further validation audit was run on a held-out split (see `work/notebooks/w06_validation_audit.ipynb`) to sanity-check that these numbers hold beyond the single train/test split.
 
 ## 6. Interpretation
@@ -79,7 +79,19 @@ python scripts/run_all.py
 ```
 
 - **Random seed:** `random_state=42` used throughout (train/test split and model training).
-- **Environment:** <ADD pip freeze highlights or requirements.txt deltas if any packages were pinned/changed from the starter repo>
+- **Environment:** packages from `requirements.txt` (unchanged from the starter repo), plus DuckDB for warehouse queries.
+
+## 9. Known issues found in review, and the v3 plan
+
+A post-submission review of the v2 pipeline found issues that limit what the v2 numbers mean:
+
+1. **Label is static, not decay** (see Section 4).
+2. **Feature/label window overlap:** `ctr_last30` is computed over the same 30 days as the label. CTR is strongly position-dependent, so part of the 97% recall reflects that mechanical relationship rather than an early-warning signal.
+3. **Query-table overlap:** `fact_content_query_90d` covers the most recent ~90 days, which includes the label window (the data dictionary flags this explicitly).
+4. **Random split:** the 80/20 split is not grouped by `client_hash_id`, so pages from the same client appear in train and test.
+5. **`imp_prev30` = 0 for all rows:** most likely because the daily *sample* table covers ≤ 30 days, leaving the previous-30-day window empty — to be verified.
+
+**v3** fixes these by using the full daily fact table, anchoring at a date T, building features only from the 90 days before T and the label only from the 30 days after T, using client-grouped splits, and comparing against a "past trend continues" baseline. Step 1: `work/scripts/v3_01_explore_windows.py`.
 
 ---
 
