@@ -1,0 +1,18 @@
+[theme]
+base = "light"
+primaryColor = "#9C6B30"
+backgroundColor = "#F5F2EC"
+secondaryBackgroundColor = "#ECE6DA"
+textColor = "#13203A"
+font = "Inter, system-ui, sans-serif"
+headingFont = "Fraunces, Georgia, serif"
+codeFont = "IBM Plex Mono, monospace"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

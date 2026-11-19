@@ -4,6 +4,13 @@
 
 ---
 
+## Live Demo
+**[Open the interactive app](https://flyrank-ml-internship-5tx26sdqullcgj7petr9yk.streamlit.app)**: score a single page, build a ranked review queue from a CSV, and see exactly why the model gives each score.
+
+![App demo: choosing an example page, moving the signals and watching the risk score update](docs/media/app_demo.gif)
+
+---
+
 ## What It Does
 Flags web pages for SEO/content review using Google Search Console performance and query-footprint signals, built on FlyRank's ~79M-row pseudonymized search warehouse.
 
@@ -68,11 +75,11 @@ Runs the five-stage pipeline:
 ```
 Results written to `outputs/`.
 
-**Interactive dashboard:**
+**Interactive app:**
 ```bash
 streamlit run app.py
 ```
-Opens a local dashboard (`http://localhost:8501`) — load a Quick Scenario (Healthy / Borderline / High-Risk) or adjust sliders manually to see the model's decay flag update live.
+Opens at `http://localhost:8501` with three tabs: **Score a page** (example pages, live sliders, adjustable review cut-off, a score breakdown and what-if curves), **Score a list of pages** (upload a CSV or use 40 synthetic example pages, get a ranked review queue to download), and **How the model works** (label, signals, results and limits).
 
 **Live demo (no install needed):**
 https://flyrank-ml-internship-5tx26sdqullcgj7petr9yk.streamlit.app
