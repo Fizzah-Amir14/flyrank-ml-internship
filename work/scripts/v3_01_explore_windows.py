@@ -3,7 +3,7 @@ FlyRank v3 - Step 1: check the data and preview a forward-looking decay label.
 
 Run locally (needs HF_TOKEN with gated access to FlyRank/internship-warehouse):
     pip install duckdb pandas pyarrow
-    export HF_TOKEN=hf_xxx
+    export HF_TOKEN=hf_xxx                 # Windows PowerShell: $env:HF_TOKEN="hf_xxx"
     python work/scripts/v3_01_explore_windows.py
 
 Output: printed diagnostics + data/v3/features_preview.parquet
@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
 HF_TOKEN = os.environ["HF_TOKEN"]
 REL = "hf://datasets/FlyRank/internship-warehouse"
@@ -28,21 +29,26 @@ print("\n[1] Date coverage")
 for name, src in [("sample (used in v2)", SAMPLE), ("full fact", FACT)]:
     lo, hi, days = con.sql(
         f"SELECT MIN(report_date), MAX(report_date), COUNT(DISTINCT report_date) FROM {src}"
-    ).fetchone()
+    ).fetchall()[0]
     print(f"  {name:20} {lo} -> {hi}  ({days} distinct days)")
+    if name == "full fact":
+        full_max = hi
 # If the sample covers <= 30 days, the "prev30" window was simply empty.
 
 # --- 2. Pick the anchor date T --------------------------------------------------
 # Features:  [T-90, T)      (past only)
 # Label:     [T, T+30)      (future only)
-T = con.sql(f"SELECT MAX(report_date) - INTERVAL 30 DAY FROM {FACT}").fetchone()[0]
+import datetime as dt
+T = full_max - dt.timedelta(days=30)
+m_lo = (T - dt.timedelta(days=90)).strftime("%Y-%m")
+m_hi = (T + dt.timedelta(days=30)).strftime("%Y-%m")
 print(f"\n[2] Anchor date T = {T}")
 
 eligible = con.sql(f"""
     SELECT COUNT(*) FILTER (WHERE gsc_data_start <= DATE '{T:%Y-%m-%d}' - INTERVAL 90 DAY) AS ok,
            COUNT(*) AS total
     FROM {CLIENTS}
-""").fetchone()
+""").fetchall()[0]
 print(f"    clients with >= 90 days GSC history before T: {eligible[0]} / {eligible[1]}")
 
 # --- 3. Build windows per content item -----------------------------------------
@@ -55,7 +61,8 @@ df = con.sql(f"""
         SELECT f.*,
                DATE_DIFF('day', f.report_date, DATE '{T:%Y-%m-%d}') AS d  -- days before T (negative = after)
         FROM {FACT} f JOIN c USING (client_hash_id)
-        WHERE f.report_date >= DATE '{T:%Y-%m-%d}' - INTERVAL 90 DAY
+        WHERE f.month BETWEEN '{m_lo}' AND '{m_hi}'          -- read only the needed partitions
+          AND f.report_date >= DATE '{T:%Y-%m-%d}' - INTERVAL 90 DAY
           AND f.report_date <  DATE '{T:%Y-%m-%d}' + INTERVAL 30 DAY
     )
     SELECT client_hash_id, content_hash_id,
@@ -81,7 +88,7 @@ df = con.sql(f"""
 print(f"\n[3] Content items in window: {len(df):,}")
 
 # Keep pages that existed for the whole feature window and have enough signal
-full_history = df["first_seen"] <= (T - __import__("datetime").timedelta(days=89))
+full_history = pd.to_datetime(df["first_seen"]) <= pd.Timestamp(T - dt.timedelta(days=89))
 enough_signal = df["imp_f1"].fillna(0) >= 50
 df = df[full_history & enough_signal].copy()
 print(f"    after filters (full 90d history, >= 50 impressions in last 30d): {len(df):,}")
