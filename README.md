@@ -1,11 +1,13 @@
 # FlyRank ML Internship — Search Ranking Decay Classifier
 
-**Performance:** 82.1% accuracy · 97% recall on a 409,205-record feature set derived from a 79M-row Google Search Console dataset
+**Status:** v2 complete (82.1% accuracy · 97% recall on 409,205 pages from a 79M-row Google Search Console warehouse) · **v3 in progress** — reframing the task as true forward-looking decay prediction (see [What v3 changes](#what-v3-changes-and-why))
 
 ---
 
 ## What It Does
-Identifies web pages at risk of search-ranking decay by analyzing Google Search Console performance and engagement signals over time. Uses a classifier trained on FlyRank's ~79M-row search-ranking warehouse to flag pages needing SEO/content intervention.
+Flags web pages for SEO/content review using Google Search Console performance and query-footprint signals, built on FlyRank's ~79M-row pseudonymized search warehouse.
+
+> **Honest scope of v2:** the v2 label is *"the page's average position over the last 30 days is deeper than the dataset median (81.7)"* — i.e. it identifies **low-visibility pages**, not pages whose ranking is *changing*. v3 replaces this with a forward-looking decay label.
 
 ## Who It's For
 - SEO teams tracking declining search performance
@@ -13,7 +15,7 @@ Identifies web pages at risk of search-ranking decay by analyzing Google Search 
 - SEO researchers/data scientists studying ranking changes at scale
 
 ## Results 
-82.1% accuracy, 97% recall. Full methodology, baseline comparison, and error analysis are in `work/capstone_report.md`.
+v2: 82.1% accuracy, 97% recall vs. a 50.1% majority-class baseline. Methodology, error analysis and known issues are in `work/capstone_report.md`.
 
 ---
 
@@ -112,12 +114,28 @@ Intentionally recall-oriented: catches 97% of decaying pages at the cost of lowe
 
 ---
 
-## Limitations
-- **Directional, not causal** — flags correlated signals, doesn't claim they cause decay
-- **No historical impression trend** — `imp_prev30` was missing for most of the sample; relies on current signals, not trend over time
-- **~33% false-flag rate on healthy pages** — tuned for high recall, meant to narrow a review queue, not auto-act
-- **Trained on a single 60-day snapshot** — not validated against newer data beyond the audit in `work/notebooks/w06_validation_audit.ipynb`
-- **Not a ranking-algorithm predictor** — flags existing decay signals, doesn't reverse-engineer Google's algorithm
+## Limitations (v2)
+- **Label measures low visibility, not decay** — `pos_last30 > 81.7` flags deep-ranking pages; it does not measure change over time
+- **Feature/label window overlap** — `ctr_last30` comes from the same 30 days as the label, and CTR is strongly position-dependent, so part of the 97% recall reflects that mechanical link rather than early warning
+- **Query features overlap the label period** — `fact_content_query_90d` covers the most recent ~90 days, which includes the label window
+- **Random (not client-grouped) split** — pages from the same client appear in both train and test, which can inflate scores
+- **No historical impression trend** — `imp_prev30` came out as 0 for every row; the likely cause is that the daily *sample* table covers ≤ 30 days, so the "previous 30 days" window was empty (being verified in v3)
+- **~32% of healthy pages get flagged; ~25% of the review queue are false alarms** — tuned for high recall as a screening filter, not an autonomous decision-maker
+- **Directional, not causal** — and not a Google ranking-algorithm predictor
+
+---
+
+## What v3 changes and why
+| v2 | v3 |
+|---|---|
+| Label: position deeper than median (static) | Label: impressions/position **worsen over the next 30 days** after an anchor date T |
+| Features and label from the same window | Features from the 90 days **before** T only; label from the 30 days **after** T |
+| Daily *sample* table | Full `fact_content_daily_performance` (all months) |
+| Random 80/20 split | **Client-grouped** split + time-based check |
+| Compared to majority class | Compared to majority class **and** a "past trend continues" naive baseline |
+| Logistic Regression | Logistic Regression vs. LightGBM, with SHAP explanations and calibration |
+
+Step 1 (data checks + label comparison): `work/scripts/v3_01_explore_windows.py`.
 
 ---
 
